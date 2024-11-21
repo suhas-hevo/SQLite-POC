@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package org.poc;
+
+message Scn{
+    int64 scn=1;
+}
+
+message TableId{
+    string catalog_name=1;
+    string schema_name=2;
+    string table_name =3;
+    string id=4;
+}
+
+message DMLEntry{
+    repeated string old_values = 1;
+    repeated string new_values = 2;
+    string event_type = 3;
+    string object_owner = 4;
+    string object_name = 5;
+}
+
+message LogminerDMLEvent{
+    string event_type=1;
+    Scn scn = 2;
+    TableId table_id = 3;
+    string row_id = 4;
+    string rs_id = 5;
+    string change_time = 6;
+    DMLEntry dml_entry = 7;
+}
+
+message LogminerEventRow{
+    string transaction_id = 1;
+    string operation = 2;
+    LogminerDMLEvent logminer_dml_event = 3;
+}
