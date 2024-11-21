@@ -22,8 +22,6 @@ public class SQLiteBackedEventProcessor implements EventProcessor{
 
     private long txnInMemoryLimit;
 
-    private final SQLiteConnectionManager sqLiteConnectionManager = new SQLiteConnectionManager();
-
     public SQLiteBackedEventProcessor(TransactionEventsDao transactionEventsDao, long txnInMemoryLimit){
         this.txnInMemoryLimit = txnInMemoryLimit;
         this.transactionEventsDao = transactionEventsDao;
@@ -43,11 +41,12 @@ public class SQLiteBackedEventProcessor implements EventProcessor{
     }
 
     private void handleCommitEvent(String txnId){
-        List<LogminerDMLEvent> transactionEvents = new ArrayList<>();
+        Long totalTransactionEvents = 0L;
         try {
-            transactionEvents.addAll(transactionEventsDao.removeAndGetTransactionEvents(txnId));
-            transactionEvents.addAll(transactionsAndEventsMap.getOrDefault(txnId, Collections.emptyList()));
-            log.info("Commit event read for transaction: {}, number of events in transaction: {}", txnId, transactionEvents.size());
+            totalTransactionEvents += transactionEventsDao.removeAndGetTransactionEvents(txnId);
+            totalTransactionEvents += transactionsAndEventsMap.getOrDefault(txnId, Collections.emptyList()).size();
+            transactionsAndEventsMap.remove(txnId);
+            log.info("Commit event read for transaction: {}, number of events in transaction: {}", txnId, totalTransactionEvents);
         }catch (SQLException | InvalidProtocolBufferException e){
             log.error("Error while trying to fetch transaction: {} after reading commit event", txnId, e);
             throw new RuntimeException(e);

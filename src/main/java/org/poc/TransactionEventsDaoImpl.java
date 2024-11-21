@@ -1,6 +1,9 @@
 package org.poc;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.State;
 import org.poc.LogminerEventRowOuterClass.LogminerDMLEvent;
 
 import java.sql.Connection;
@@ -11,6 +14,7 @@ import java.sql.Statement;
 import java.util.LinkedList;
 import java.util.List;
 
+//@State(Scope.Thread)
 public class TransactionEventsDaoImpl implements TransactionEventsDao{
 
     private ConnectionManager connectionManager;
@@ -19,6 +23,7 @@ public class TransactionEventsDaoImpl implements TransactionEventsDao{
     }
 
     @Override
+    //@Benchmark
     public void persistEvents(String txnId, List<LogminerDMLEvent> events) throws SQLException {
         String insertQuery = "INSERT INTO DMLeventStorage (event_data) VALUES (?)";
 
@@ -51,9 +56,10 @@ public class TransactionEventsDaoImpl implements TransactionEventsDao{
     }
 
     @Override
-    public List<LogminerEventRowOuterClass.LogminerDMLEvent> removeAndGetTransactionEvents(String txnId) throws SQLException, InvalidProtocolBufferException {
+    //@Benchmark
+    public Long removeAndGetTransactionEvents(String txnId) throws SQLException, InvalidProtocolBufferException {
         String selectQuery = "SELECT id, event_data FROM DMLeventStorage order by id";
-        List<LogminerDMLEvent> events = new LinkedList<>();
+        Long eventsCount = 0L;
 
         Connection connection = connectionManager.getConnection(txnId);
         try (PreparedStatement selectStatement = connection.prepareStatement(selectQuery)) {
@@ -65,10 +71,10 @@ public class TransactionEventsDaoImpl implements TransactionEventsDao{
 
                 // Deserialize Protobuf data
                 LogminerDMLEvent event = LogminerDMLEvent.parseFrom(serializedData);
-                events.add(event);
+                eventsCount++;
             }
             connectionManager.close(txnId);
         }
-        return events;
+        return eventsCount;
     }
 }

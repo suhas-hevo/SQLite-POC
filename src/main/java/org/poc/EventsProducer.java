@@ -2,6 +2,7 @@ package org.poc;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Stopwatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -9,6 +10,7 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -16,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 public class EventsProducer {
 
@@ -27,7 +30,7 @@ public class EventsProducer {
 
     public static void main(String[] args) throws IOException {
         String outputEventsFilePath = args[0];
-        if(outputEventsFilePath == null || outputEventsFilePath.isEmpty() || !new File(outputEventsFilePath).exists()){
+        if(outputEventsFilePath == null || outputEventsFilePath.isEmpty()){
             throw new RuntimeException("Please provide valid file name as first arg for transaction events output");
         }
 
@@ -41,7 +44,7 @@ public class EventsProducer {
         log.info("Transactions to be generated: {}", transactionList);
 
         // Write events to file
-        writeEventRowsToFile(transactionList, outputEventsFilePath);
+        writeEventRowsToFile(transactionList, outputEventsFilePath, Long.parseLong(args[2]));
     }
 
     private static List<Map<String, Integer>> extractTransactionsConfig(String transactionsConfig){
@@ -61,9 +64,12 @@ public class EventsProducer {
         }
     }
 
-    private static void writeEventRowsToFile(List<Map<String, Integer>> transactionList, String fileName) throws IOException {
+    private static void writeEventRowsToFile(List<Map<String, Integer>> transactionList, String fileName, long eventSize) throws IOException {
         Set<String> started = new HashSet<>();
         Set<String> completed = new HashSet<>();
+        long totalSizeBytes = 0;
+
+        Stopwatch stopwatch = Stopwatch.createStarted();
 
         try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(fileName, true))) {
             while(!transactionList.isEmpty()) {
@@ -74,39 +80,50 @@ public class EventsProducer {
                     String transactionId = String.valueOf(transactions.keySet().toArray()[RANDOM.nextInt(transactions.size())]);
 
                     if (!started.contains(transactionId)) {
-                        LogminerEventRowOuterClass.LogminerEventRow startEvent = createEventRow(transactionId, "start");
-                        dos.writeInt(startEvent.toByteArray().length);
-                        dos.write(startEvent.toByteArray());
+                        byte[] startEventBytes = createEventRow(transactionId, "start", eventSize).toByteArray();
+                        totalSizeBytes+= startEventBytes.length;
+                        dos.writeInt(startEventBytes.length);
+                        dos.write(startEventBytes);
                         started.add(transactionId);
+                        log.info("Event generation started for transaction: {}", transactionId);
                     }
 
                     String operation = OPERATIONS[RANDOM.nextInt(OPERATIONS.length)];
-                    LogminerEventRowOuterClass.LogminerEventRow eventRow = createEventRow(transactionId, operation);
-                    dos.writeInt(eventRow.toByteArray().length);
-                    dos.write(eventRow.toByteArray());
+                    byte[] eventRowBytes = createEventRow(transactionId, operation, eventSize).toByteArray();
+                    totalSizeBytes+=eventRowBytes.length;
+                    dos.writeInt(eventRowBytes.length);
+                    dos.write(eventRowBytes);
 
                     transactions.put(transactionId, transactions.get(transactionId) - 1);
+
+                    if(stopwatch.elapsed(TimeUnit.MINUTES) > 2){
+                        log.info("Current status of pending events generation: {}", transactions);
+                    }
+
                     if (transactions.get(transactionId) <= 0) {
-                        LogminerEventRowOuterClass.LogminerEventRow commitEvent = createEventRow(transactionId, "commit");
-                        dos.writeInt(commitEvent.toByteArray().length);
-                        dos.write(commitEvent.toByteArray());
+                        byte[] commitEventBytes = createEventRow(transactionId, "commit", eventSize).toByteArray();
+                        totalSizeBytes+= commitEventBytes.length;
+                        dos.writeInt(commitEventBytes.length);
+                        dos.write(commitEventBytes);
                         transactions.remove(transactionId);
                         completed.add(transactionId);
+                        log.info("Event generation finished for transaction: {}", transactionId);
                     }
-                    log.info("Event generation complete");
                 }
             }
+            log.info("Event generation complete for all transactions, total size: {} Bytes", totalSizeBytes);
         }
+        stopwatch.stop();
     }
 
-    private static LogminerEventRowOuterClass.LogminerEventRow createEventRow(String transactionId, String operation) {
+    private static LogminerEventRowOuterClass.LogminerEventRow createEventRow(String transactionId, String operation, long eventSize) {
         // Create base objects
         String transactionIdPrefix = transactionId;
         LogminerEventRowOuterClass.LogminerDMLEvent logminerDMLEvent = null;
 
         // For operations "start" and "commit", LogminerDMLEvent is null
         if (!operation.equals("start") && !operation.equals("commit")) {
-            logminerDMLEvent = createLogminerDMLEvent(operation);
+            logminerDMLEvent = createLogminerDMLEvent(operation, eventSize);
         }
 
         // Build LogminerEventRow
@@ -121,9 +138,34 @@ public class EventsProducer {
         return eventRowBuilder.build();
     }
 
-    private static LogminerEventRowOuterClass.LogminerDMLEvent createLogminerDMLEvent(String operation) {
+    private static LogminerEventRowOuterClass.LogminerDMLEvent createLogminerDMLEvent(String operation, Long eventSize) {
         // Create a sample DMLEntry
-        LogminerEventRowOuterClass.DMLEntry dmlEntry = LogminerEventRowOuterClass.DMLEntry.newBuilder()
+        LogminerEventRowOuterClass.DMLEntry.Builder dmlEntryBuilder = LogminerEventRowOuterClass.DMLEntry.newBuilder();
+
+        List<String> values = new ArrayList<>();
+
+        long totalValuesSize = 0;
+
+        // Add more random values to oldValues if needed
+        while(totalValuesSize < eventSize) {
+            String randomVal = generateRandomValue();
+            totalValuesSize+=randomVal.getBytes().length;
+            values.add(randomVal);
+        }
+
+        if(operation.equals("insert")){
+            dmlEntryBuilder.addAllNewValues(values);
+        }else if(operation.equals("delete")){
+            dmlEntryBuilder.addAllOldValues(values);
+        }else{
+            dmlEntryBuilder.addAllOldValues(values);
+            List<String> newValues = new ArrayList<>(values);
+            newValues.remove(values.size()-1);
+            newValues.add("random change to value");
+            dmlEntryBuilder.addAllNewValues(newValues);
+        }
+
+        LogminerEventRowOuterClass.DMLEntry dmlEntry = dmlEntryBuilder
                 .addAllOldValues(List.of("1", "old_value"))
                 .addAllNewValues(List.of("1", "new_value"))
                 .setEventType(operation.toUpperCase())
@@ -149,6 +191,38 @@ public class EventsProducer {
                 .setChangeTime("2024-11-20T12:00:00")
                 .setDmlEntry(dmlEntry)
                 .build();
+    }
+
+    // Generate random integer as a string
+    private static String generateRandomInteger() {
+        return String.valueOf(RANDOM.nextInt(100000));  // Random integer between 0 and 999
+    }
+
+    // Generate random sentence
+    private static String generateRandomSentence() {
+        String[] words = {"apple", "banana", "cherry", "date", "elephant", "fox"};
+        StringBuilder sentence = new StringBuilder();
+        for (int i = 0; i < 4; i++) {
+            sentence.append(words[RANDOM.nextInt(words.length)]).append(" ");
+        }
+        return sentence.toString().trim();
+    }
+
+    private static String generateRandomDate() {
+        LocalDate randomDate = LocalDate.of(2020, 1, 1)
+                .plusDays(RANDOM.nextInt(1825));
+        return randomDate.toString();
+    }
+
+    private static String generateRandomValue() {
+        int type = RANDOM.nextInt(3);  // Randomly choose a type (0 = int, 1 = sentence, 2 = date)
+
+        switch (type) {
+            case 0: return generateRandomInteger();
+            case 1: return generateRandomSentence();
+            case 2: return generateRandomDate();
+            default: return "random_value";
+        }
     }
 
 }
