@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import org.poc.dao.TransactionEventsDao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

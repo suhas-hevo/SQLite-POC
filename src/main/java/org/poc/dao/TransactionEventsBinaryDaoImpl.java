@@ -1,9 +1,7 @@
-package org.poc;
+package org.poc.dao;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.State;
+import org.poc.ConnectionManager;
 import org.poc.LogminerEventRowOuterClass.LogminerDMLEvent;
 
 import java.sql.Connection;
@@ -11,19 +9,16 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.LinkedList;
 import java.util.List;
 
-//@State(Scope.Thread)
-public class TransactionEventsDaoImpl implements TransactionEventsDao{
+public class TransactionEventsBinaryDaoImpl implements TransactionEventsDao{
 
     private ConnectionManager connectionManager;
-    public TransactionEventsDaoImpl(ConnectionManager connectionManager){
+    public TransactionEventsBinaryDaoImpl(ConnectionManager connectionManager){
         this.connectionManager = connectionManager;
     }
 
     @Override
-    //@Benchmark
     public void persistEvents(String txnId, List<LogminerDMLEvent> events) throws SQLException {
         String insertQuery = "INSERT INTO DMLeventStorage (event_data) VALUES (?)";
 
@@ -56,7 +51,6 @@ public class TransactionEventsDaoImpl implements TransactionEventsDao{
     }
 
     @Override
-    //@Benchmark
     public Long removeAndGetTransactionEvents(String txnId) throws SQLException, InvalidProtocolBufferException {
         String selectQuery = "SELECT id, event_data FROM DMLeventStorage order by id";
         Long eventsCount = 0L;

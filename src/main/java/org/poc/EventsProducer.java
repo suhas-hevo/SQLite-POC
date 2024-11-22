@@ -97,6 +97,8 @@ public class EventsProducer {
                     transactions.put(transactionId, transactions.get(transactionId) - 1);
 
                     if(stopwatch.elapsed(TimeUnit.MINUTES) > 2){
+                        stopwatch.reset();
+                        stopwatch.start();
                         log.info("Current status of pending events generation: {}", transactions);
                     }
 

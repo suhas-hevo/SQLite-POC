@@ -1,4 +1,4 @@
-package org.poc;
+package org.poc.dao;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import org.poc.LogminerEventRowOuterClass.LogminerDMLEvent;
