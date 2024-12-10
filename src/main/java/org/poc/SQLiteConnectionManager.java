@@ -18,8 +18,9 @@ public class SQLiteConnectionManager implements ConnectionManager{
 
     @Override
     public Connection getConnection(String txnId) throws SQLException {
-        if(!connectionMap.containsKey(txnId)){
-            connectionMap.putIfAbsent(txnId, DriverManager.getConnection("jdbc:sqlite:" + txnId + ".db"));
+        Connection connection = connectionMap.get(txnId);
+        if(null == connection || connection.isClosed()){
+            connectionMap.putIfAbsent(txnId, DriverManager.getConnection("jdbc:sqlite:" + txnId + "sl.db"));
         }
         return connectionMap.get(txnId);
     }

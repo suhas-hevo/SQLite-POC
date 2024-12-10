@@ -10,6 +10,8 @@ public interface TransactionEventsDao {
 
     void persistEvents(String txnId, List<LogminerDMLEvent> events) throws SQLException;
 
+    void persistByteEvents(String txnId, List<byte[]> events) throws SQLException;
+
     void prepareDBForTxnEvents(String txnId) throws SQLException;
 
     Long removeAndGetTransactionEvents(String txnId) throws SQLException, InvalidProtocolBufferException;

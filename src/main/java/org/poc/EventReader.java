@@ -2,8 +2,10 @@ package org.poc;
 
 import com.google.common.base.Stopwatch;
 import org.poc.dao.TransactionEventsBinaryDaoImpl;
+import org.poc.dao.TransactionEventsBinaryDuckDaoImpl;
 import org.poc.dao.TransactionEventsDao;
 import org.poc.dao.TransactionEventsStringDaoImpl;
+import org.poc.dao.TransactionEventsStringDuckDaoImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,9 +38,15 @@ public class EventReader {
         if(args[2].equals("string")){
             transactionEventsDao = new TransactionEventsStringDaoImpl(new SQLiteConnectionManager());
             log.info("Using string store for events");
-        }else{
+        }else if(args[2].equals("binary")){
             transactionEventsDao = new TransactionEventsBinaryDaoImpl(new SQLiteConnectionManager());
             log.info("Using binary store for events");
+        }else if(args[2].equals("duckbinary")){
+            transactionEventsDao = new TransactionEventsBinaryDuckDaoImpl(new DuckdbConnectionManager());
+            log.info("Using binary store for events");
+        }else{
+            transactionEventsDao = new TransactionEventsStringDuckDaoImpl(new DuckdbConnectionManager());
+            log.info("Using string duckdb store for events");
         }
 
         EventProcessor eventProcessor = new SQLiteBackedEventProcessor(transactionEventsDao, Long.parseLong(args[1]));
@@ -64,7 +72,7 @@ public class EventReader {
                 }
             }
         }finally {
-            clearAllDbFiles();
+//            clearAllDbFiles();
         }
     }
 

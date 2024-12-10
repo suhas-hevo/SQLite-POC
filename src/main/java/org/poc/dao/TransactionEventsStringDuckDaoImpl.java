@@ -14,18 +14,18 @@ import java.sql.Statement;
 import java.util.Base64;
 import java.util.List;
 
-public class TransactionEventsStringDaoImpl implements TransactionEventsDao {
+public class TransactionEventsStringDuckDaoImpl implements TransactionEventsDao {
 
-    private static final Logger log = LoggerFactory.getLogger(TransactionEventsStringDaoImpl.class);
+    private static final Logger log = LoggerFactory.getLogger(TransactionEventsStringDuckDaoImpl.class);
     private ConnectionManager connectionManager;
 
-    public TransactionEventsStringDaoImpl(ConnectionManager connectionManager) {
+    public TransactionEventsStringDuckDaoImpl(ConnectionManager connectionManager) {
         this.connectionManager = connectionManager;
     }
 
     @Override
     public void persistEvents(String txnId, List<LogminerEventRowOuterClass.LogminerDMLEvent> events) throws SQLException {
-        String insertQuery = "INSERT INTO DMLeventStorageStr (event_data) VALUES (?)";
+        String insertQuery = "INSERT INTO DMLeventStorageStr (id, event_data) VALUES (?, ?)";
 
         Connection connection = connectionManager.getConnection(txnId);
         connection.setAutoCommit(false);
@@ -34,11 +34,13 @@ public class TransactionEventsStringDaoImpl implements TransactionEventsDao {
             for (LogminerEventRowOuterClass.LogminerDMLEvent event : events) {
                 // Serialize each DMLevent to a byte array
                 String serializedData = Base64.getEncoder().encodeToString(event.toByteArray());
-                statement.setString(1, serializedData);
+                statement.setInt(1, 1);
+                statement.setString(2, serializedData);
                 statement.addBatch();
             }
             statement.executeBatch();
             connection.commit();
+            log.info("Commited {} events to text in duckdb", events.size());
         }finally {
             connection.setAutoCommit(true);
         }
@@ -46,7 +48,7 @@ public class TransactionEventsStringDaoImpl implements TransactionEventsDao {
 
     @Override
     public void persistByteEvents(String txnId, List<byte[]> events) throws SQLException {
-        String insertQuery = "INSERT INTO DMLeventStorageStr (event_data) VALUES (?)";
+        String insertQuery = "INSERT INTO DMLeventStorageStr (id, event_data) VALUES (?, ?)";
 
         Connection connection = connectionManager.getConnection(txnId);
         connection.setAutoCommit(false);
@@ -55,11 +57,13 @@ public class TransactionEventsStringDaoImpl implements TransactionEventsDao {
             for (byte[] event : events) {
                 // Serialize each DMLevent to a byte array
                 String serializedData = Base64.getEncoder().encodeToString(event);
-                statement.setString(1, serializedData);
+                statement.setInt(1, 1);
+                statement.setString(2, serializedData);
                 statement.addBatch();
             }
             statement.executeBatch();
             connection.commit();
+            log.info("Commited {} events to text in duckdb", events.size());
         }finally {
             connection.setAutoCommit(true);
         }
@@ -70,7 +74,7 @@ public class TransactionEventsStringDaoImpl implements TransactionEventsDao {
     public void prepareDBForTxnEvents(String txnId) throws SQLException {
         String createTableQuery = """
                 CREATE TABLE IF NOT EXISTS DMLeventStorageStr (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id INTEGER,
                     event_data TEXT NOT NULL
                 );
                 """;
